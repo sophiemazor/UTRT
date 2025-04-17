@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Which Box?</title>
+    <!-- <script src="https://unpkg.com/jspsych@8.2.1"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-html-button-response@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-fullscreen@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-preload@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-image-button-response@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-survey-text@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-audio-button-response@1.2.0"></script>
+    <link href="https://unpkg.com/jspsych@8.2.1/css/jspsych.css" rel="stylesheet" type="text/css" /> -->
+    <script src="jspsych/dist/index.browser.js"></script>
+    <script src="jspsych/@jspsych/plugin-html-button-response/dist/index.browser.js"></script>
+    <script src="jspsych/@jspsych/plugin-preload/dist/index.browser.js"></script>
+    <script src="jspsych/@jspsych/plugin-image-button-response/dist/index.browser.js"></script>
+    <script src="jspsych/@jspsych/plugin-survey-text/dist/index.browser.js"></script>
+    <script src="jspsych/@jspsych/plugin-audio-button-response/dist/index.browser.js"></script>
+    <link rel="stylesheet" href="jspsych/css/jspsych.css">
+  </head>
+  <body></body>
+  <script>
+
+        /* INITIALIZE JSPSYCH */
+        var jsPsych = initJsPsych({
+                on_finish: function() { //all this "on_finish" stuff is to export data to csv at the end
+                    var id = jsPsych.data.get().filter({task_part: 'id_question'}).values()[0].response.id;
+                    jsPsych.data.addProperties({ID: id});
+                    var file_name = id + '.csv';
+                    jsPsych.data
+                        .get().localSave(
+                            'csv',
+                            file_name
+                        );
+                },
+            });
+
+        /* HELPER FUNCTIONS */
+
+        // enable "start trial" button
+        function enableNextButton() {
+            document.getElementById("btn-next").disabled = false;
+            document.getElementById("btn-next").style.opacity = "1";
+        }
+
+        // make "start trial" button invisible
+        function invisibleNextButton() {
+            document.getElementById("btn-next").disabled = true;
+            document.getElementById("btn-next").style.opacity = "0";
+        }
+
+        // disable "sample" + "decide" buttons
+        function disableSampleButtons() {
+            document.getElementById("btn-sample").disabled = true;
+            document.getElementById("btn-decide").disabled = true;
+            document.getElementById("btn-sample").style.opacity = "0.5";
+            document.getElementById("btn-decide").style.opacity = "0.5";
+        }
+
+        // enable "sample" + "decide" buttons (only enable sample button if we're under the number of max samples; only enable decide button if we've already taken the first sample)
+        function enableSampleButtons() {
+            if (sampleIndex < maxSamples) {
+                document.getElementById("btn-sample").disabled = false;
+                document.getElementById("btn-sample").style.opacity = "1";
+            }
+            if (sampleIndex > 0) {
+                document.getElementById("btn-decide").disabled = false;
+                document.getElementById("btn-decide").style.opacity = "1";
+            }
+        }
+        
+        // initialize all the videos for a given trial set
+        function initializeTrials(trialSet) {
+            introPlayed = false; // intro video has not yet played
+            sampleIndex = 0; // sample index is 0
+            introVideo = `UTStim/videos/${trialSet}_intro.mp4`; // set introVideo to video file for current trial set
+            sampleVideos = Array.from({ length: maxSamples }, (_, i) => `UTStim/videos/${trialSet}_sample${i + 1}.mp4`); // create array with all sample videos for current trial set
+            let videoContainer = document.getElementById("video-container"); // initialize video container
+            videoContainer.innerHTML = ""; // clear any previous videos
+
+            // first, load intro video
+            let introVid = document.createElement("video");
+            introVid.src = introVideo;
+            introVid.id = `intro-video`;
+            introVid.style.height = "100%"; 
+            introVid.style.width = "100%"; 
+            introVid.onplay = disableSampleButtons; // when the intro video starts playing, make disable the "sample" + "decide" buttons
+            introVid.onended = enableSampleButtons; // when the intro video ends, enable the "sample" + "decide" buttons
+            videoContainer.appendChild(introVid); // add intro video to the video container
+            
+            // preload all sample videos as hidden elements
+            sampleVideos.forEach(
+                (src, i) => { 
+                    let vid = document.createElement("video");
+                    vid.src = src;
+                    vid.id = `sample-video-${i}`;
+                    vid.style.display = "none"; // Hide initially
+                    vid.style.height = "100%"; 
+                    vid.style.width = "100%"; 
+                    vid.onplay = disableSampleButtons; // when sample video starts playing, disable the "sample" + "decide" buttons
+                    vid.onended = enableSampleButtons; // when sample video ends, enable the "sample" + "decide" buttons
+                    videoContainer.appendChild(vid); // add sample video to the video container
+                }
+            );
+        }
+
+        // Play next sample video
+        function playNextVideo() {
+            if (!(introPlayed)) { // if the intro video hasn't played yet, play that first
+                invisibleNextButton(); // hide the "start trial" button
+
+                let nextVideo = document.getElementById(`intro-video`); // set the intro
+                nextVideo.style.display = "block"; // Show next video
+                nextVideo.play();
+                
+                mainVideo = nextVideo; // Update main video reference
+                introPlayed = true;
+            }
+            else {
+                if (sampleIndex < maxSamples) {
+                    invisibleNextButton();
+                    mainVideo.style.display = "none"; // Hide current video
+                
+                    let nextVideo = document.getElementById(`sample-video-${sampleIndex}`);
+                    nextVideo.style.display = "block"; // Show next video
+                    nextVideo.play();
+                    
+                    mainVideo = nextVideo; // Update main video reference
+                    sampleIndex++;
+                }
+                if (sampleIndex >= maxSamples) {
+                    document.getElementById("btn-sample").disabled = true;
+                    document.getElementById("btn-sample").style.opacity = "0.5";
+                }
+            }
+        }
+
+        /*Move to choice screen*/
+        function goToChoiceScreen(trialSet) {
+            jsPsych.finishTrial({ trial_set: trialSet, samples_taken: sampleIndex });
+        }
+
+        /* Define max number of samples */
+        var maxSamples = 20;
+
+        /* Define the 6 trial sets (in order) for set 1 */
+        var distributions = [
+            "set1_70-30",
+            "set1_95-5",
+            "set1_60-40", 
+            "set1_80-20", 
+            "set1_55-45",
+            "set1_65-35"
+        ];
+        
+        /* Define the 6 trial sets (in order) for set 2 */
+        var distributions2 = [
+            "set2_80-20", 
+            "set2_55-45",
+            "set2_65-35",
+            "set2_70-30",
+            "set2_95-5",
+            "set2_60-40"
+        ];
+
+        /* Collect all videos, audio, images for preloading */
+        let allAudio = ["UTStim/audio/which-box-audio.mp3", "UTStim/audio/how-sure-audio.mp3", "UTStim/audio/halfway-audio.mp3"]
+        
+        let allImages = ["UTStim/images/next.png", "UTStim/images/sample.png", "UTStim/images/choose.png", "UTStim/images/not-sure.png", "UTStim/images/little-sure.png", "UTStim/images/very-sure.png", "UTStim/images/halfway.png", "UTStim/images/greatjob.jpg"];
+        let allVideos = [];
+
+        distributions.forEach(trialSet => {
+            allImages.push(`UTStim/images/${trialSet}_choice1.png`, `UTStim/images/${trialSet}_choice2.png`);
+            allVideos.push(`UTStim/videos/${trialSet}_intro.mp4`)
+            for (let i = 1; i <= maxSamples; i++) {
+                allVideos.push(`UTStim/videos/${trialSet}_sample${i+1}.mp4`);
+            };
+        });
+
+        distributions2.forEach(trialSet => {
+            allImages.push(`UTStim/images/${trialSet}_choice1.png`, `UTStim/images/${trialSet}_choice2.png`);
+            allVideos.push(`UTStim/videos/${trialSet}_intro.mp4`)
+            for (let i = 1; i <= maxSamples; i++) {
+                allVideos.push(`UTStim/videos/${trialSet}_sample${i+1}.mp4`);
+            };
+        });
+
+        /* Preload all videos and images */
+        const preload = {
+            type: jsPsychPreload,
+            auto_preload: false,
+            videos: allVideos,
+            images: allImages,
+            audio: allAudio
+        };
+
+        /* Function to create a trial set */
+        function createTrialSet(trialSet) {
+            return {
+                type: jsPsychHtmlButtonResponse,
+                stimulus: ` 
+                    <div style="text-align: center">
+                        <div id="video-container" style="display: flex; position: fixed; top: 0%; left: 7%; width:86vw; justify-content: center; overflow: hidden; ">
+                            </div>
+                        <div id="button-container-trials" style="display: flex; position: absolute; bottom: 0%; left: 50%; transform: translateX(-50%); height: 20vh; width: 100vw; justify-content: center; gap: 50vw; background-color: lightgrey;">
+                            <button id="btn-sample" disabled style="opacity: 0">
+                                <img src="UTStim/images/sample.png" height="75%">
+                            </button>
+                            <button id="btn-decide" disabled style="opacity: 0">
+                                <img src="UTStim/images/choose.png" height="75%">
+                            </button>
+                            </div>
+                        <div id="button-container-intro" style="display: flex; position: absolute; bottom: 40%; left: 50%; height: 30vh; transform: translateX(-50%); translateY(-50%); justify-content: center;">
+                            <button id="btn-next" disabled style="opacity: 0">
+                                <img src="UTStim/images/next.png" height="100%">
+                            </button>
+                            </div>
+                    </div>
+                `,
+                choices: [],
+                on_load: function () {
+                    enableNextButton();
+                    initializeTrials(trialSet);
+                    
+                        document.getElementById("btn-next").addEventListener("click", function () {
+                            playNextVideo();
+                        })
+
+                        document.getElementById("btn-sample").addEventListener("click", function () {                        
+                            if (sampleIndex < maxSamples) {
+                            playNextVideo();
+                            }
+                        });
+                
+                        document.getElementById("btn-decide").addEventListener("click", function () {
+                        goToChoiceScreen(trialSet);
+                        });
+
+                }
+            };
+        }
+
+        /* Function to create a choice screen */
+        function createChoiceScreen(trialSet) {
+            return {
+                type: jsPsychHtmlButtonResponse,
+                stimulus: `
+                    <div style="text-align: center;">
+                        <h1>Which box do you think was behind the curtain?</h1>
+                        <div id="button-container-choice" style="display: flex; height: 50vh; justify-content: center; gap: 15vw;">
+                            <button id="choice1">
+                                <img src="UTStim/images/${trialSet}_choice1.png" height="100%">
+                            </button>
+                            <button id="choice2">
+                                <img src="UTStim/images/${trialSet}_choice2.png" height="100%">
+                            </button>
+                        </div>
+                    </div>
+                `,
+                choices: [], // No default jsPsych buttons
+                on_load: function () {
+                    // Play the audio file
+                    let audio = new Audio("UTStim/audio/which-box-audio.mp3"); // Update this path to match your file location
+                    audio.play();
+
+                    // Add click event listeners for choices
+                    document.getElementById("choice1").addEventListener("click", function () {
+                        audio.pause();
+                        audio.currentTime = 0;
+                        jsPsych.finishTrial({ trial_set: trialSet, choice: "choice1" });
+                    });
+
+                    document.getElementById("choice2").addEventListener("click", function () {
+                        audio.pause();
+                        audio.currentTime = 0;
+                        jsPsych.finishTrial({ trial_set: trialSet, choice: "choice2" });
+                    });
+                }
+            };
+        }
+
+
+        function createConfidenceScreen(trialSet) {
+            return {
+                type: jsPsychHtmlButtonResponse,
+                stimulus: `
+                    <div style="text-align: center;">
+                    <h1>How sure are you?</h1>
+                        <div id="button-container-confidence" style="display: flex; justify-content: center; width: 95vw; gap: 5vw;">
+                        <button id="not-sure">
+                            <img src="UTStim/images/not-sure.png" width="100%">
+                        </button>
+                        <button id="little-sure">
+                            <img src="UTStim/images/little-sure.png" width="100%">
+                        </button>
+                        <button id="very-sure">
+                            <img src="UTStim/images/very-sure.png" width="100%">
+                        </button>
+                        </div>
+                    </div>
+                `,
+                choices: [],
+                on_load: function () {
+                    let audio = new Audio("UTStim/audio/how-sure-audio.mp3"); // Update this path to match your file location
+                    audio.play();
+
+                document.getElementById("not-sure").addEventListener("click", function () {
+                    audio.pause();
+                    audio.currentTime = 0;
+                    jsPsych.finishTrial({ trial_set: trialSet, confidence: "not-sure" });
+                });
+                document.getElementById("little-sure").addEventListener("click", function () {
+                    audio.pause();
+                    audio.currentTime = 0;
+                    jsPsych.finishTrial({ trial_set: trialSet, confidence: "little-sure" });
+                });
+                document.getElementById("very-sure").addEventListener("click", function () {
+                    audio.pause();
+                    audio.currentTime = 0;
+                    jsPsych.finishTrial({ trial_set: trialSet, confidence: "very-sure" });
+                });
+                }
+            };
+        }
+        const halfway = {
+            type: jsPsychImageButtonResponse,
+            stimulus: "UTStim/images/halfway.png",
+            stimulus_height: 400,
+            choices: ["    "], 
+            on_load: function () {
+                let audio = new Audio("UTStim/audio/halfway-audio.mp3");
+                audio.play();
+            }
+        }
+
+        const greatJob = {
+            type: jsPsychImageButtonResponse,
+            stimulus: "greatjob.jpg",
+            stimulus_height: 400,
+            choices: ["    "],
+            on_load: function () {
+                let audio = new Audio("UTStim/audio/greatjob-audio.mp3");
+                audio.play();
+            }
+        }
+
+        var subjectNumber = {
+            type: jsPsychSurveyText,
+            questions: [{prompt: 'Subject Number:', name: 'id'}],
+            data: {task_part: 'id_question'}
+        };
+
+        /* Generate all trials dynamically */
+        let timeline = [preload];
+
+        distributions.forEach(trialSet => {
+            timeline.push(createTrialSet(trialSet));
+            timeline.push(createChoiceScreen(trialSet));
+            timeline.push(createConfidenceScreen(trialSet));
+        });
+
+        timeline.push(halfway);
+
+        distributions2.forEach(trialSet => {
+            timeline.push(createTrialSet(trialSet));
+            timeline.push(createChoiceScreen(trialSet));
+            timeline.push(createConfidenceScreen(trialSet));
+        });
+
+        timeline.push(greatJob);
+        timeline.push(subjectNumber)
+
+        /* RUN EXPERIMENT */
+        jsPsych.run(timeline);
+  </script>
+</html>
