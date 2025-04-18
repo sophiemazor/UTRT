@@ -23,19 +23,22 @@
   <script>
     
 
-    /* INITIALIZE JSPSYCH */
-    var jsPsych = initJsPsych({
-        on_finish: function() { // all this "on_finish" stuff is to export data to csv at the end
-            var id = jsPsych.data.get().filter({task_part: 'id_question'}).values()[0].response.id;
-            jsPsych.data.addProperties({ID: id});
-            var file_name = id + '-RT.csv';
-            jsPsych.data
-                .get().localSave(
-                    'csv',
-                    file_name
-                );
-            },
-    });
+/* INITIALIZE JSPSYCH */
+var jsPsych = initJsPsych({
+    on_finish: function() {
+        // Extract participant ID from earlier response
+        var id = jsPsych.data.get().filter({task_part: 'id_question'}).values()[0].response.id;
+        jsPsych.data.addProperties({ID: id});
+
+        // Optional: log data to console for debugging
+        console.log(jsPsych.data.get().csv());
+
+        // ⛔ File saving disabled for mobile compatibility
+        // var file_name = id + '-RT.csv';
+        // jsPsych.data.get().localSave('csv', file_name);
+    },
+});
+
 
     // enable "start trial" button
     function enableButton(buttonID) {
